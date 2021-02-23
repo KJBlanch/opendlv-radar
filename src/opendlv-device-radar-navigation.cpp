@@ -35,6 +35,7 @@
 #define radians(a) (((a)*M_PI)/180)
 
 
+
 ///////////////////////////////////////////////////////////
 
 
@@ -62,9 +63,7 @@ int32_t main(int32_t argc, char **argv) {
     uint32_t const id{(commandlineArguments["id"].size() != 0) 
       ? static_cast<uint32_t>(std::stoi(commandlineArguments["id"])) : 0};
     bool const verbose{commandlineArguments.count("verbose") != 0};
-    bool const gui{commandlineArguments.count("gui") != 0};
-    uint32_t const simulated_angle_rot{(commandlineArguments["testing_sar"].size() != 0) 
-      ? static_cast<uint32_t>(std::stoi(commandlineArguments["testing_sar"])) : 0};
+    bool const timings{commandlineArguments.count("timings") != 0};
   
     std::string const name{(commandlineArguments["name"].size() != 0) 
       ? commandlineArguments["name"] : "/polar0"};
@@ -85,7 +84,7 @@ int32_t main(int32_t argc, char **argv) {
 
 
     //Fixed values for use with a Navico Radar (Spoke Length is 512 values)
-    int origin, c_width, c_height;
+    uint16_t origin, c_width, c_height;
     origin = 512;
     c_width = origin*2;
     c_height = origin*2;
@@ -105,6 +104,9 @@ int32_t main(int32_t argc, char **argv) {
     //Address for lookup_cache
     uint16_t addBk [2048][512*2];
 
+    //Build Timing Variables
+    cluon::data::TimeStamp pT1, pT2;
+
     //Build pixelmap
 
     //The radar spoke data comprises of an azimuth, an index (distance) and a strength. Instead of cranking out some square root functions each time
@@ -113,10 +115,10 @@ int32_t main(int32_t argc, char **argv) {
 
     for (int i = 0; i <= 4095; i++){
       for (int j = 0; j<= 512; j++) {
-        int distance = j;
+        uint16_t distance = j;
         float angle = (float(i)/4096*360);
         float angle_rad;
-        int x, y;
+        uint16_t x, y;
 
         if (angle < 90) {
           angle_rad = radians(angle);
@@ -180,18 +182,18 @@ int32_t main(int32_t argc, char **argv) {
 
     //Start Lambda function that fires on recieving a RadarDetectionReading envelope on the cluon id. 
     cluon::OD4Session od4{static_cast<uint16_t>(
-        std::stoi(commandlineArguments["cid"])), [&addBk, &shmArgb, c_width, c_height, &display, &visual, &window, &ximage, &current_angle, origin, &model_update, &initial, &frame_idx, verbose](cluon::data::Envelope &&env){
-            
+        std::stoi(commandlineArguments["cid"])), [&pT1, &pT2, timings, &addBk, &shmArgb, c_width, c_height, &display, &visual, &window, &ximage, &current_angle, origin, &model_update, &initial, &frame_idx, verbose](cluon::data::Envelope &&env){
+            cluon::data::TimeStamp cT_now = cluon::time::now();
             //Now, we unpack the cluon::data::Envelope to get our message.
             opendlv::proxy::RadarDetectionReading msg = cluon::extractMessage<opendlv::proxy::RadarDetectionReading>(std::move(env));
             
             //If invalid strength, ensure that a valid number is written to the memory.
-            int current_strength = 0;
+            uint8_t current_strength = 0;
 
             //Retrieve current angle, and set empty values for pixels and radians. 
             float angle = msg.azimuth()/4096*360;
             float angle_rad;
-            int x, y;
+            uint16_t x, y;
             
             //Extract the packet
             std::string packet = msg.data();
@@ -200,7 +202,7 @@ int32_t main(int32_t argc, char **argv) {
             //Process the packet. 
             for (int i = 0; i < packet.size(); i = i+2) {
               current_strength = std::stoi(std::to_string(packet[i]));
-              int distance = i;
+              uint16_t distance = i;
 
               //Retrieve x and y location values from the pixel map based on azimuth and distance.
               x = std::stoi(std::to_string(addBk[int(msg.azimuth())/2][distance*2]));
@@ -217,13 +219,15 @@ int32_t main(int32_t argc, char **argv) {
                 return 0;
               }
 
+      
 
               if (verbose) std::cout << "Strength: " << current_strength << " " << "Distance: " << distance << std::endl;
+              
               //Current strength is writing from -128 to 127. Add 128 to get correct 255 RGB Value. 
               
 
               //Use values from pixel map to get the image memory address for that pixel. 4 Bytes per pixel. X is *4, Y is *1024 (For the row) 
-              int index = ((4*x)+(1024*y)*4);
+              uint32_t index = ((4*x)+(1024*y)*4);
               shmArgb->lock();
 
               //Write the new values. White strength pixel, so all strengths are the same value. Set R, G or B to 255 for PPI color. 
@@ -246,7 +250,8 @@ int32_t main(int32_t argc, char **argv) {
             if (verbose) std::cout << shmArgb->valid() << std::endl;
             
             //If the azimuth has completed a circle
-            if (msg.azimuth() == 2 ) {
+            //Use 2 instead of 0 as dropped packets hold a 0 val for azimuth and will trigger this. 
+            if (msg.azimuth() == 2 || remainder(msg.azimuth(), 256) == 0) {
               
               //Build PPI
               if (verbose) std::cout << "Updating window" << std::endl;
@@ -260,15 +265,25 @@ int32_t main(int32_t argc, char **argv) {
       
               shmArgb->unlock();
               shmArgb->notifyAll();
-              
-              model_update = false;
-              return(0);
+
             }
 
-            //Redundant
-            if (remainder(msg.azimuth()-1, 512) == 0 && model_update == false) {
-              //Reset
-              model_update = true;
+            //For Timing Diagnostics
+            if (msg.azimuth() == 2 && timings) {
+              //std::cout << "Timings" << std::endl;
+              cluon::data::TimeStamp cT1, cT2;
+              
+
+              cT1 = cT_now;//current message time msg.
+              cT2 = cluon::time::now();//current Systime
+
+              float T1 = cluon::time::deltaInMicroseconds(cT1, pT1);
+              float T2 = cluon::time::deltaInMicroseconds(cT2, pT2);
+              std::cout << float((T2-T1)/1000) << std::endl;
+
+              pT1 = cT1;
+              pT2 = cT2;
+
             }
             
         }
@@ -276,7 +291,8 @@ int32_t main(int32_t argc, char **argv) {
     };
 
     //Set listening to true and open thread to wait for incoming messages. 
-
+    //od4.dataTrigger(MyMessage1::ID(), onMyMessage1); //This is in the tutorial. Seems to work without it?
+    
     bool listening = true;
     
     using namespace std::chrono_literals;

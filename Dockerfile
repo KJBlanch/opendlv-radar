@@ -20,18 +20,23 @@ RUN apk update && \
         linux-headers \
         cmake \
         g++ \
+        libx11-dev \
+        libx11 \
         make
+
+
 
 ADD . /opt/sources
 WORKDIR /opt/sources
-RUN mkdir build && \
-    cd build && \
+RUN mkdir docker_build && \
+    cd docker_build && \
     cmake -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/tmp/dest .. && \
     make && make install
 
 
 # Runtime
 FROM alpine:3.12
+
 
 WORKDIR /usr/bin
 COPY --from=builder /tmp/dest/* .
