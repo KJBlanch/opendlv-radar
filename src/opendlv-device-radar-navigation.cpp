@@ -101,6 +101,10 @@ int32_t main(int32_t argc, char **argv) {
     std::unique_ptr<cluon::SharedMemory> shmArgb{
       new cluon::SharedMemory{nameArgb, c_width * c_height * 4}};
 
+    //Address for prior image
+    std::unique_ptr<cluon::SharedMemory> priorArgb{
+      new cluon::SharedMemory{nameArgb, c_width * c_height * 4}};
+
     //Address for lookup_cache
     uint16_t addBk [2048][512*2];
 
@@ -182,7 +186,7 @@ int32_t main(int32_t argc, char **argv) {
 
     //Start Lambda function that fires on recieving a RadarDetectionReading envelope on the cluon id. 
     cluon::OD4Session od4{static_cast<uint16_t>(
-        std::stoi(commandlineArguments["cid"])), [&pT1, &pT2, timings, &addBk, &shmArgb, c_width, c_height, &display, &visual, &window, &ximage, &current_angle, origin, &model_update, &initial, &frame_idx, verbose](cluon::data::Envelope &&env){
+        std::stoi(commandlineArguments["cid"])), [&pT1, &pT2, timings, &addBk, &priorArgb, &shmArgb, c_width, c_height, &display, &visual, &window, &ximage, &current_angle, origin, &model_update, &initial, &frame_idx, verbose](cluon::data::Envelope &&env){
             cluon::data::TimeStamp cT_now = cluon::time::now();
             //Now, we unpack the cluon::data::Envelope to get our message.
             opendlv::proxy::RadarDetectionReading msg = cluon::extractMessage<opendlv::proxy::RadarDetectionReading>(std::move(env));
@@ -265,6 +269,92 @@ int32_t main(int32_t argc, char **argv) {
       
               shmArgb->unlock();
               shmArgb->notifyAll();
+
+            }
+
+            //For optic flow
+            //Check initial rotation is complete
+            if (msg.azimuth() == 2 && init) {
+              std::vector<uint16_t[4]> pixel_list;
+              //Retrieve current index list. 
+
+              //Define pixel block. 
+                //Xi neighbour Xii is +-4
+                //Yi neighbour Yii is +-(512*4)
+                //Pixel 0 is 0,0 [0:3], index 0. Pixel 1 is 1,0 is [4:7], index 4. 
+                //Pixel 512 is 1,0 [2048:2051], index 2048. Pixel 513 is 1,1 [2052:2055], index 2052.
+                //Resolve for y first. Add x. 
+
+                //To compare 1,1 to surroundings.
+
+              //for  
+              //for for
+              uint32_t current_index = ((4*current_x)+(1024*current_y)*4);
+              uint16_t closest_array[4];
+              uint16_t low_val = shmArgb->data()[current_index]-priorArgb->data()[current_index];
+
+
+              for (uint8_t y_r = comp_low; y_r <= comp_high; x++) {
+                uint16_t y_index = current_y + y_r; 
+                if (y_index > 1024 || y_index < 0){
+                  continue;
+                }
+
+                for (uint8_t x_r = comp_low; x_r <= comp_high; y++){
+                  if (y_index > 1024 || y_index < 0){
+                    continue;
+                  }
+                  uint16_t x_index = current_x + x_r;
+                  uint32_t lookup_index = ((4*x_index)+(1024*y_index)*4);
+                  uint16_t pixel_dif = shmArgb->data()[current_index]-priorArgb->data()[lookup_index];
+                  if (pixel_dif < low_val) {
+
+                    low_val = pixel_dif;
+                    closest_array[0] = current_x;
+                    closest_array[1] = current_y;
+                    closest_array[2] = x_r;
+                    closest_array[3] = y_r;
+                  }
+                }
+              }
+
+              pixel_list.push_back(closest_array);
+
+
+
+              //close close
+              //
+              
+              
+            
+              
+              
+
+              shmArgb->lock();
+              priorArgb->lock();
+                
+              //Copy contents of current image to old image. 
+              memcpy(&priorArgb, &shmArgb, sizeof(priorArgb));
+                
+                
+              shmArgb->unlock();
+              priorArgb->unlock();
+
+              
+              
+            } else {
+              //Ensure that an entire circle is complete. 
+              
+                shmArgb->lock();
+                priorArgb->lock();
+                
+                //Copy contents of current image to old image. 
+                memcpy(&priorArgb, &shmArgb, sizeof(priorArgb));
+                
+                
+                shmArgb->unlock();
+                priorArgb->unlock();
+                init = true;
 
             }
 
