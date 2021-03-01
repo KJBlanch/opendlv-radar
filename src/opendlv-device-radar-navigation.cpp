@@ -39,6 +39,41 @@
 ///////////////////////////////////////////////////////////
 
 
+///Converts an x/y co-ordinate to a memory index based on the width, height and depth of the pixel map. 
+//For this system, typical useage is (x, y, 1024, 1024, 4)
+uint8_t index_lookup(uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t depth  {
+  uint32_t max = width*height*depth;
+  uint32_t index = ((depth*x)+(width*y)*depth);
+  if (index < 0) {
+    return -1;
+  } else if (index >= max) {
+    return -1;
+  } else {
+    return index;
+  }
+}
+
+
+//Builds an adaptive structure that builds an x11 image that allows for scalable and zoomable data interpretation. 
+//Technically allows for a cluster to be viewed if known in advance. 
+struct bitmap {
+  uint16_t width; //width of the image
+  uint16_t height; //height of the image
+  uint16_t depth; //depth of each pixel (rgba would be 4)
+  uint16_t range; //range of the expected radar spoke 
+  uint16_t x_origin; //centrepoint of sensor on x_axis
+  uint16_t y_origin; //centrepoint of sensor on y_axis
+  uint16_t n_azimuth; //number of spokes per frame
+  std::string name; //name of the shared image;
+  uint8_t scale; //Essentially zoom.
+  
+  std::unique_ptr<cluon::SharedMemory> shmArgb{new cluon::SharedMemory{name, width * height * 4}};
+  
+  uint16_t lookup_cache;
+}
+
+
+
 int32_t main(int32_t argc, char **argv) {
 
   int32_t retCode{1};
@@ -227,7 +262,7 @@ int32_t main(int32_t argc, char **argv) {
               
 
               //Use values from pixel map to get the image memory address for that pixel. 4 Bytes per pixel. X is *4, Y is *1024 (For the row) 
-              uint32_t index = ((4*x)+(1024*y)*4);
+              uint32_t index = index_lookup(x, y, c_width, c_height, 4);
               shmArgb->lock();
 
               //Write the new values. White strength pixel, so all strengths are the same value. Set R, G or B to 255 for PPI color. 

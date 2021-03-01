@@ -102,4 +102,5 @@ add_executable(${PROJECT_NAME}
   ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.hpp)
 target_link_libraries( ${PROJECT_NAME} ${LIBRARIES})
 
+
 install(TARGETS ${PROJECT_NAME} DESTINATION bin COMPONENT ${PROJECT_NAME})

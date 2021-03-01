@@ -23,6 +23,13 @@ There are two methods (Local & Docker). Documentation to be completed.
 ./opendlv-device-radar-navigation --cid=111 --id=15 --verbose
 
 ```
+
+## Example Usage. 
+
+Playback of a rec file captured by openDLV-view. 
+
+1. Run 
+
 # Docker
 
 To be completed
@@ -37,6 +44,22 @@ To be completed
 ## Known Bugs
 
 To be completed
+
+## Commit Convetion. 
+
+<Git Branch> <Commit Number>. <Author>
+<Fixes>
+<Features>
+<New/Ongoing Bugs>
+<Compilability/Status>
+
+## Branch Convetion
+
+Main - For release (Build & testing handled by GitLab Actions)
+WIP - For versioning, and bughandling before release.
+
+Other subranches are feature related. 
+    Optic = OpticFlow implementation
 
 ## License
 
