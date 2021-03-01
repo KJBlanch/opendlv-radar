@@ -47,11 +47,11 @@ To be completed
 
 ## Commit Convetion. 
 
-<Git Branch> <Commit Number>. <Author>
-<Fixes>
-<Features>
-<New/Ongoing Bugs>
-<Compilability/Status>
+Commit Number. Author
+Fixes
+Features
+New/Ongoing Bugs
+Compilability/Status
 
 ## Branch Convetion
 
