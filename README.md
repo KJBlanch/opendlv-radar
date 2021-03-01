@@ -48,10 +48,15 @@ To be completed
 ## Commit Convetion. 
 
 Commit Number. Author
+
 Fixes
+
 Features
+
 New/Ongoing Bugs
+
 Compilability/Status
+
 
 ## Branch Convetion
 
