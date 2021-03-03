@@ -34,6 +34,7 @@
 
 #define radians(a) (((a)*M_PI)/180)
 
+using namespace std::chrono_literals;
 
 
 ///////////////////////////////////////////////////////////
@@ -102,8 +103,8 @@ int32_t main(int32_t argc, char **argv) {
       new cluon::SharedMemory{nameArgb, c_width * c_height * 4}};
 
     //Address for prior image
-    std::unique_ptr<cluon::SharedMemory> priorArgb{
-      new cluon::SharedMemory{nameArgb, c_width * c_height * 4}};
+    //std::unique_ptr<cluon::SharedMemory> priorArgb{
+      //new cluon::SharedMemory{nameArgb, c_width * c_height * 4}};
 
     //Address for lookup_cache
     uint16_t addBk [2048][512*2];
@@ -186,8 +187,9 @@ int32_t main(int32_t argc, char **argv) {
 
     //Start Lambda function that fires on recieving a RadarDetectionReading envelope on the cluon id. 
     cluon::OD4Session od4{static_cast<uint16_t>(
-        std::stoi(commandlineArguments["cid"])), [&pT1, &pT2, timings, &addBk, &priorArgb, &shmArgb, c_width, c_height, &display, &visual, &window, &ximage, &current_angle, origin, &model_update, &initial, &frame_idx, verbose](cluon::data::Envelope &&env){
+        std::stoi(commandlineArguments["cid"])), [&pT1, &pT2, timings, &addBk, &shmArgb, c_width, c_height, &display, &visual, &window, &ximage, &current_angle, origin, &model_update, &initial, &frame_idx, verbose](cluon::data::Envelope &&env){
             cluon::data::TimeStamp cT_now = cluon::time::now();
+            uint16_t test_c = 0;
             //Now, we unpack the cluon::data::Envelope to get our message.
             opendlv::proxy::RadarDetectionReading msg = cluon::extractMessage<opendlv::proxy::RadarDetectionReading>(std::move(env));
             
@@ -201,16 +203,24 @@ int32_t main(int32_t argc, char **argv) {
             
             //Extract the packet
             std::string packet = msg.data();
+            
+            //If packet is empty, break lambda. 
+            if (packet.size() == 0) {
+              return 0;
+            }
+
             if (verbose) std::cout << "Packet: " << packet.size() << std::endl;
-           
+            int k = 1;
             //Process the packet. 
-            for (int i = 0; i < packet.size(); i = i+2) {
-              current_strength = std::stoi(std::to_string(packet[i]));
+            for (int i = 0; i < packet.size(); i = i+k) {
+              if (i > (packet.size()/3*2)) k = 2;
+              current_strength = packet[i];
+            
               uint16_t distance = i;
 
               //Retrieve x and y location values from the pixel map based on azimuth and distance.
-              x = std::stoi(std::to_string(addBk[int(msg.azimuth())/2][distance*2]));
-              y = std::stoi(std::to_string(addBk[int(msg.azimuth())/2][(distance*2)+1]));
+              x = addBk[int(msg.azimuth())/2][distance*2];
+              y = addBk[int(msg.azimuth())/2][(distance*2)+1];
                 
               if (verbose) std::cout << "    Angle: " << msg.azimuth() << " " << angle << " ";
               if (verbose) std::cout << "Points: " << x << " " << y << " ";
@@ -225,9 +235,7 @@ int32_t main(int32_t argc, char **argv) {
 
       
 
-              if (verbose) std::cout << "Strength: " << current_strength << " " << "Distance: " << distance << std::endl;
-              
-              //Current strength is writing from -128 to 127. Add 128 to get correct 255 RGB Value. 
+              if (verbose) std::cout << "Strength: " << std::to_string(current_strength) << " " << "Distance: " << distance << std::endl;
               
 
               //Use values from pixel map to get the image memory address for that pixel. 4 Bytes per pixel. X is *4, Y is *1024 (For the row) 
@@ -236,12 +244,20 @@ int32_t main(int32_t argc, char **argv) {
 
               //Write the new values. White strength pixel, so all strengths are the same value. Set R, G or B to 255 for PPI color. 
               //4th value is Alpha. Set as 0 for no transparency. 
-              shmArgb->data()[index] = (current_strength);
-              shmArgb->data()[index+1] = (current_strength);
+          
               shmArgb->data()[index+2] = (current_strength);
+
+              if (current_strength == uint8_t(255)) { 
+                current_strength = uint8_t(0);
+              } else if (current_strength == 0) {
+                current_strength = 255;
+              }
+
+              shmArgb->data()[index+1] = (current_strength);              
+              shmArgb->data()[index] = (current_strength);
               shmArgb->data()[index+3] = char(0);
               
-              if (verbose) std::cout << "Index: " << index << ". Value " << std::to_string(shmArgb->data()[index]) << std::endl;
+              if (verbose) std::cout << "Index: " << index << ". Value " << shmArgb->data()[index] << std::endl;
 
               //Revalidate shared memory. 
               shmArgb->unlock();
@@ -255,10 +271,10 @@ int32_t main(int32_t argc, char **argv) {
             
             //If the azimuth has completed a circle
             //Use 2 instead of 0 as dropped packets hold a 0 val for azimuth and will trigger this. 
-            if (msg.azimuth() == 2 || remainder(msg.azimuth(), 256) == 0) {
+            if (remainder(msg.azimuth(), 170) == float(0)) {
               
               //Build PPI
-              if (verbose) std::cout << "Updating window" << std::endl;
+              if (verbose) std::cout << "Updating window: " << msg.azimuth() << std::endl;
               
               XMapWindow(display, window);
 
@@ -272,6 +288,8 @@ int32_t main(int32_t argc, char **argv) {
 
             }
 
+
+            /*
             //For optic flow
             //Check initial rotation is complete
             if (msg.azimuth() == 2 && init) {
@@ -358,6 +376,7 @@ int32_t main(int32_t argc, char **argv) {
 
             }
 
+            */
             //For Timing Diagnostics
             if (msg.azimuth() == 2 && timings) {
               //std::cout << "Timings" << std::endl;
@@ -385,7 +404,7 @@ int32_t main(int32_t argc, char **argv) {
     
     bool listening = true;
     
-    using namespace std::chrono_literals;
+    
     while (listening) {
       std::this_thread::sleep_for(1s);
     }

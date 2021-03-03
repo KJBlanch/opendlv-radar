@@ -91,6 +91,7 @@ if(UNIX)
 endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/test)
 
 find_package(X11 REQUIRED)
 include_directories(SYSTEM ${X11_INCLUDE_DIRS})
@@ -103,3 +104,9 @@ add_executable(${PROJECT_NAME}
 target_link_libraries( ${PROJECT_NAME} ${LIBRARIES})
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin COMPONENT ${PROJECT_NAME})
+
+enable_testing()
+
+add_test(${PROJECT_NAME}/initial_test initial_test
+  ${CMAKE_CURRENT_SOURCE_DIR}/test/initial-test.c
+  )
