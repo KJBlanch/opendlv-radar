@@ -97,16 +97,23 @@ find_package(X11 REQUIRED)
 include_directories(SYSTEM ${X11_INCLUDE_DIRS})
 set(LIBRARIES ${LIBRARIES} ${X11_X11_LIB})
 
+################################################################################
+# Create executable.
+
 add_executable(${PROJECT_NAME}
   ${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}.cpp
   ${CMAKE_BINARY_DIR}/cluon-complete.hpp
   ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.hpp)
+
 target_link_libraries( ${PROJECT_NAME} ${LIBRARIES})
 
+################################################################################
+# Enable unit testing.
+#enable_testing()
+#add_executable(${PROJECT_NAME}-runner ${CMAKE_CURRENT_SOURCE_DIR}/test/tests-radar-navigation.cpp $<TARGET_OBJECTS:${PROJECT_NAME}-core>)
+#target_link_libraries(${PROJECT_NAME}-runner ${LIBRARIES})
+#add_test(NAME ${PROJECT_NAME}-runner COMMAND ${PROJECT_NAME}-runner)
+
+################################################################################
+# Install executable.
 install(TARGETS ${PROJECT_NAME} DESTINATION bin COMPONENT ${PROJECT_NAME})
-
-enable_testing()
-
-add_test(${PROJECT_NAME}/initial_test initial_test
-  ${CMAKE_CURRENT_SOURCE_DIR}/test/initial-test.c
-  )

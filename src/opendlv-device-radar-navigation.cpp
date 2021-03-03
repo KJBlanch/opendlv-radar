@@ -37,6 +37,88 @@
 using namespace std::chrono_literals;
 
 
+//function draw
+  //If invalid strength, ensure that a valid number is written to the memory.
+uint8_t decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon::SharedMemory> &shmArgb, uint16_t addBk[2048][512*2], bool verbose, uint16_t origin, uint16_t c_height, uint16_t c_width) {
+
+  uint8_t current_strength = 0;
+
+  //Retrieve current angle, and set empty values for pixels and radians. 
+  float angle = msg.azimuth()/4096*360;
+  float angle_rad;
+  uint16_t x, y;
+  
+  //Extract the packet
+  std::string packet = msg.data();
+  
+  //If packet is empty, break lambda. 
+  if (packet.size() == 0) {
+    return 0;
+  }
+
+  if (verbose) std::cout << "Packet: " << packet.size() << std::endl;
+  int k = 1;
+  //Process the packet. 
+  for (int i = 0; i < packet.size(); i = i+k) {
+    if (i > (packet.size()/3*2)) k = 2;
+    current_strength = packet[i];
+  
+    uint16_t distance = i;
+
+    //Retrieve x and y location values from the pixel map based on azimuth and distance.
+    x = addBk[int(msg.azimuth())/2][distance*2];
+    y = addBk[int(msg.azimuth())/2][(distance*2)+1];
+      
+    if (verbose) std::cout << "    Angle: " << msg.azimuth() << " " << angle << " ";
+    if (verbose) std::cout << "Points: " << x << " " << y << " ";
+    
+    //Ensure x and y are valid
+    if (0 > x || x > (origin*2)) {
+      return -1;
+    }
+    if (0 > y || y > (origin*2)) {
+      return -1;
+    }
+
+    if (verbose) std::cout << "Strength: " << std::to_string(current_strength) << " " << "Distance: " << distance << std::endl;
+    
+    //Use values from pixel map to get the image memory address for that pixel. 4 Bytes per pixel. X is *4, Y is *1024 (For the row) 
+    uint32_t index = ((4*x)+(1024*y)*4);
+    shmArgb->lock();
+
+    //Write the new values. White strength pixel, so all strengths are the same value. Set R, G or B to 255 for PPI color. 
+    //4th value is Alpha. Set as 0 for no transparency. 
+
+    shmArgb->data()[index+2] = (current_strength);
+
+    if (current_strength == uint8_t(255)) { 
+      current_strength = uint8_t(0);
+    } else if (current_strength == 0) {
+      current_strength = 255;
+    }
+
+    shmArgb->data()[index+1] = (current_strength);              
+    shmArgb->data()[index] = (current_strength);
+    shmArgb->data()[index+3] = char(0);
+    
+    if (verbose) std::cout << "Index: " << index << ". Value " << shmArgb->data()[index] << std::endl;
+
+    //Revalidate shared memory. 
+    shmArgb->unlock();
+    if (verbose) std::cout << shmArgb->valid() << std::endl;
+    shmArgb->notifyAll();
+
+  }
+  //Spoke unpacked. Final validation
+  if (verbose) std::cout << shmArgb->valid() << std::endl;
+  return (msg.azimuth());
+}
+
+//function optic
+
+//function timing
+
+
 ///////////////////////////////////////////////////////////
 
 
@@ -190,88 +272,16 @@ int32_t main(int32_t argc, char **argv) {
         std::stoi(commandlineArguments["cid"])), [&pT1, &pT2, timings, &addBk, &shmArgb, c_width, c_height, &display, &visual, &window, &ximage, &current_angle, origin, &model_update, &initial, &frame_idx, verbose](cluon::data::Envelope &&env){
             cluon::data::TimeStamp cT_now = cluon::time::now();
             uint16_t test_c = 0;
+
+
             //Now, we unpack the cluon::data::Envelope to get our message.
             opendlv::proxy::RadarDetectionReading msg = cluon::extractMessage<opendlv::proxy::RadarDetectionReading>(std::move(env));
+            uint16_t current_azimuth = decode(msg, shmArgb, addBk, verbose, origin, c_height, c_width);
             
-            //If invalid strength, ensure that a valid number is written to the memory.
-            uint8_t current_strength = 0;
 
-            //Retrieve current angle, and set empty values for pixels and radians. 
-            float angle = msg.azimuth()/4096*360;
-            float angle_rad;
-            uint16_t x, y;
-            
-            //Extract the packet
-            std::string packet = msg.data();
-            
-            //If packet is empty, break lambda. 
-            if (packet.size() == 0) {
-              return 0;
-            }
-
-            if (verbose) std::cout << "Packet: " << packet.size() << std::endl;
-            int k = 1;
-            //Process the packet. 
-            for (int i = 0; i < packet.size(); i = i+k) {
-              if (i > (packet.size()/3*2)) k = 2;
-              current_strength = packet[i];
-            
-              uint16_t distance = i;
-
-              //Retrieve x and y location values from the pixel map based on azimuth and distance.
-              x = addBk[int(msg.azimuth())/2][distance*2];
-              y = addBk[int(msg.azimuth())/2][(distance*2)+1];
-                
-              if (verbose) std::cout << "    Angle: " << msg.azimuth() << " " << angle << " ";
-              if (verbose) std::cout << "Points: " << x << " " << y << " ";
-              
-              //Ensure x and y are valid
-              if (0 > x || x > (origin*2)) {
-                return 0;
-              }
-              if (0 > y || y > (origin*2)) {
-                return 0;
-              }
-
-      
-
-              if (verbose) std::cout << "Strength: " << std::to_string(current_strength) << " " << "Distance: " << distance << std::endl;
-              
-
-              //Use values from pixel map to get the image memory address for that pixel. 4 Bytes per pixel. X is *4, Y is *1024 (For the row) 
-              uint32_t index = ((4*x)+(1024*y)*4);
-              shmArgb->lock();
-
-              //Write the new values. White strength pixel, so all strengths are the same value. Set R, G or B to 255 for PPI color. 
-              //4th value is Alpha. Set as 0 for no transparency. 
-          
-              shmArgb->data()[index+2] = (current_strength);
-
-              if (current_strength == uint8_t(255)) { 
-                current_strength = uint8_t(0);
-              } else if (current_strength == 0) {
-                current_strength = 255;
-              }
-
-              shmArgb->data()[index+1] = (current_strength);              
-              shmArgb->data()[index] = (current_strength);
-              shmArgb->data()[index+3] = char(0);
-              
-              if (verbose) std::cout << "Index: " << index << ". Value " << shmArgb->data()[index] << std::endl;
-
-              //Revalidate shared memory. 
-              shmArgb->unlock();
-              if (verbose) std::cout << shmArgb->valid() << std::endl;
-              shmArgb->notifyAll();
-
-            }
-
-            //Spoke unpacked. Final validation
-            if (verbose) std::cout << shmArgb->valid() << std::endl;
-            
             //If the azimuth has completed a circle
             //Use 2 instead of 0 as dropped packets hold a 0 val for azimuth and will trigger this. 
-            if (remainder(msg.azimuth(), 170) == float(0)) {
+            if (remainder(current_azimuth, 170) == float(0)) {
               
               //Build PPI
               if (verbose) std::cout << "Updating window: " << msg.azimuth() << std::endl;
@@ -394,7 +404,11 @@ int32_t main(int32_t argc, char **argv) {
               pT2 = cT2;
 
             }
-            
+          //subfuntion draw
+          //subfunction optic
+          //subfunction timings
+
+
         }
     
     };
