@@ -25,11 +25,18 @@ There are two methods (Local & Docker). Documentation to be completed.
 ```
 # Docker
 
-To be completed
+To build from docker, ensure that docker is installed. The following methods have been tested.
+
+Ubuntu 18.04 LTS
+
+From a terminal within the working folder. 
 
 ```
+docker build .
 
 ```
+Compiling with docker will handle all dependencies as well as run the test-radar-navigation testing file, comprised of 10 unit-tests built using the catch infrastructure. 
+
 ## Build from sources
 
 To be completed

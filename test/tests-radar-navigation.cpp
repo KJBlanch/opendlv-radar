@@ -116,8 +116,6 @@ TEST_CASE("Test decoder with faulty payload.") {
    
 }
 
-//I SWEAR TO FUCKING GOD, IF THIS ERROR IS CAUSED BY NAMING TWO TESTS WITH THE SAME TEST NAME, THEN I AM GONNA PUNT A SQUIRREL
-
 TEST_CASE("Test decoder with sample payload and channel 0 for time stamp.") {
     
 }
