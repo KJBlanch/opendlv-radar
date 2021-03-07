@@ -35,37 +35,45 @@ using namespace std::chrono_literals;
 
 
 
-uint8_t decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon::SharedMemory> &shmArgb, uint16_t addBk[2048][512*2], bool verbose, uint16_t origin, uint16_t c_height, uint16_t c_width) {
+int decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon::SharedMemory> &shmArgb, uint16_t addBk[2048][512*2], bool verbose, uint16_t origin, uint16_t c_height, uint16_t c_width) {
 
   ///Error handling
 
   //msg
+  if (msg.data().size() == 0) {
+      //empty packet
+      return(-1);
+  }
 
 
   //shmArgb
+  if (!shmArgb->valid() ) {
+      //invalid memory
+      return(-2);
+  }
   
   
   //addBk
-
 
   //verbose - Uhhh, it's a bool. Probably should look at how to check for errors with this one. Maybe null/void?
 
   //c_height
   if (c_height <= 0) {
-    return (-1);
+    return (-3);
   }
+
   //c_width
   if (c_width <= 0) {
-    return (-1);
+    return (-4);
   }
 
   //origin
   if (origin <= 0) {
-    return (-1);
-  } else if (origin > (2*c_width)) {
-    return (-1);
-  } else if (origin > (2*c_height)) {
-    return (-1);
+    return (-5);
+  } else if (origin > c_width) {
+    return (-6);
+  } else if (origin > c_height) {
+    return (-7);
   }
 
 
@@ -82,8 +90,8 @@ uint8_t decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon
   
   //If packet is empty, break lambda. 
   if (packet.size() == 0) {
-    return -2;
-  }
+    return (-8);
+  } 
 
   if (verbose) std::cout << "Packet: " << packet.size() << std::endl;
   int k = 1;
@@ -103,10 +111,10 @@ uint8_t decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon
     
     //Ensure x and y are valid
     if (x > (origin*2)) {
-      return -3;
+      return (-9);
     }
     if (y > (origin*2)) {
-      return -3;
+      return (-10);
     }
 
     if (verbose) std::cout << "Strength: " << std::to_string(current_strength) << " " << "Distance: " << distance << std::endl;
@@ -118,6 +126,10 @@ uint8_t decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon
 
     //Write the new values. White strength pixel, so all strengths are the same value. Set R, G or B to 255 for PPI color. 
     //4th value is Alpha. Set as 0 for no transparency. 
+
+    if (index > shmArgb->size()) {
+        return(-11);
+    }
 
     shmArgb->data()[index+2] = (current_strength);
 
@@ -131,7 +143,7 @@ uint8_t decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon
     shmArgb->data()[index] = (current_strength);
     shmArgb->data()[index+3] = char(0);
     
-    if (verbose) std::cout << "Index: " << index << ". Value " << shmArgb->data()[index] << std::endl;
+    if (verbose) std::cout << "Index: " << index << ". Value " << std::to_string(shmArgb->data()[index]) << std::endl;
 
     //Revalidate shared memory. 
     shmArgb->unlock();

@@ -31,7 +31,7 @@ WORKDIR /opt/sources
 RUN mkdir docker_build && \
     cd docker_build && \
     cmake -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/tmp/dest .. && \
-    make && make test && make install 
+    make && ctest --verbose && make install 
 
 
 # Runtime

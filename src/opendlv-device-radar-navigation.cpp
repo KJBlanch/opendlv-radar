@@ -127,7 +127,7 @@ int32_t main(int32_t argc, char **argv) {
     //Each value needs both an x and y, hence the *2. 
 
     for (int i = 0; i <= 4095; i++){
-      for (int j = 0; j<= 512; j++) {
+      for (int j = 0; j<= 511; j++) {
         uint16_t distance = j;
         float angle = (float(i)/4096*360);
         float angle_rad;
