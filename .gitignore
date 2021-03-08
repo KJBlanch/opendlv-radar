@@ -37,3 +37,11 @@
 # Commit folder
 /commit
 
+# .vscode folder
+/.vscode
+
+# Scratch folder
+/scratch
+
+# Docker build folder
+/docker_build

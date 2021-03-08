@@ -31,7 +31,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
-    -lX11 \
     -D_XOPEN_SOURCE=700 \
     -D_FORTIFY_SOURCE=2 \
     -DHAVE_JPEG \
@@ -46,6 +45,10 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
     -Wunused-value -Wunused-variable -Wunused-result \
     -Wmissing-field-initializers -Wmissing-format-attribute \
     -Wmissing-include-dirs -Wmissing-noreturn")
+
+# Threads Required
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/cluon-complete.hpp
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -74,13 +77,13 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.hpp
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/${OPENDLV_STANDARD_MESSAGE_SET}
     ${CMAKE_BINARY_DIR}/cluon-msc)
 
+
 include_directories(SYSTEM ${CMAKE_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/test)
 
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
+
 set(LIBRARIES ${LIBRARIES} Threads::Threads)
-
 
 if(UNIX)
     if(NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "Darwin")
@@ -90,16 +93,36 @@ if(UNIX)
     endif()
 endif()
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-
 find_package(X11 REQUIRED)
-include_directories(SYSTEM ${X11_INCLUDE_DIRS})
+include_directories(SYSTEM ${X11_INCLUDE_DIR})
+
+
 set(LIBRARIES ${LIBRARIES} ${X11_X11_LIB})
 
-add_executable(${PROJECT_NAME}
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}.cpp
-  ${CMAKE_BINARY_DIR}/cluon-complete.hpp
-  ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.hpp)
-target_link_libraries( ${PROJECT_NAME} ${LIBRARIES})
 
+################################################################################
+# Gather all object code first to avoid double compilation.
+add_library(${PROJECT_NAME}-core OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/src/radar-decoder.cpp)
+
+
+# Add dependency to generate .hpp file.
+add_custom_target(generate_opendlv_standard_message_set_hpp DEPENDS ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.hpp)
+add_dependencies(${PROJECT_NAME}-core generate_opendlv_standard_message_set_hpp)
+
+################################################################################
+# Create executable.
+
+add_executable(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}.cpp $<TARGET_OBJECTS:${PROJECT_NAME}-core>)
+target_link_libraries(${PROJECT_NAME} ${LIBRARIES})
+
+
+################################################################################
+# Enable unit testing.
+enable_testing()
+add_executable(${PROJECT_NAME}-runner ${CMAKE_CURRENT_SOURCE_DIR}/test/tests-radar-navigation.cpp $<TARGET_OBJECTS:${PROJECT_NAME}-core>)
+target_link_libraries(${PROJECT_NAME}-runner ${LIBRARIES})
+add_test(NAME ${PROJECT_NAME}-runner COMMAND ${PROJECT_NAME}-runner)
+
+################################################################################
+# Install executable.
 install(TARGETS ${PROJECT_NAME} DESTINATION bin COMPONENT ${PROJECT_NAME})

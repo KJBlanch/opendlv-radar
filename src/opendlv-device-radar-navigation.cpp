@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Kris Blanch
+ * Copyright (C) 2021 Krister Blanch
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,19 +20,29 @@
 #include <chrono>
 #include <math.h>
 #include <cmath>
-#include "cluon-complete.hpp"
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
-#include "opendlv-standard-message-set.hpp"
+
 #include <iostream>
 #include <fstream>
 
+#include "cluon-complete.hpp"
+#include "opendlv-standard-message-set.hpp"
+#include "radar-decoder.hpp"
 #include <X11/Xlib.h>
 
 
 
 #define radians(a) (((a)*M_PI)/180)
+
+using namespace std::chrono_literals;
+
+
+//function draw
+  
+
+
+//function optic
+
+//function timing
 
 
 ///////////////////////////////////////////////////////////
@@ -40,7 +50,7 @@
 
 int32_t main(int32_t argc, char **argv) {
 
-  int32_t retCode{1};
+  int32_t retCode{0};
   
   std::cerr << "WARNING!" << std::endl;
   std::cerr << std::endl;
@@ -62,9 +72,8 @@ int32_t main(int32_t argc, char **argv) {
     uint32_t const id{(commandlineArguments["id"].size() != 0) 
       ? static_cast<uint32_t>(std::stoi(commandlineArguments["id"])) : 0};
     bool const verbose{commandlineArguments.count("verbose") != 0};
-    bool const gui{commandlineArguments.count("gui") != 0};
-    uint32_t const simulated_angle_rot{(commandlineArguments["testing_sar"].size() != 0) 
-      ? static_cast<uint32_t>(std::stoi(commandlineArguments["testing_sar"])) : 0};
+    bool const timings{commandlineArguments.count("timings") != 0};
+    bool const demo{commandlineArguments.count("demo") != 0};
   
     std::string const name{(commandlineArguments["name"].size() != 0) 
       ? commandlineArguments["name"] : "/polar0"};
@@ -85,14 +94,11 @@ int32_t main(int32_t argc, char **argv) {
 
 
     //Fixed values for use with a Navico Radar (Spoke Length is 512 values)
-    int origin, c_width, c_height;
+    uint16_t origin, c_width, c_height;
     origin = 512;
     c_width = origin*2;
     c_height = origin*2;
     float current_angle;
-
-    if (verbose) std::cout << c_width << " "  << c_height << std::endl;
-    
 
     //Set image name
     std::string const nameArgb{name + ".argb"};
@@ -102,8 +108,15 @@ int32_t main(int32_t argc, char **argv) {
     std::unique_ptr<cluon::SharedMemory> shmArgb{
       new cluon::SharedMemory{nameArgb, c_width * c_height * 4}};
 
+    //Address for prior image
+    //std::unique_ptr<cluon::SharedMemory> priorArgb{
+      //new cluon::SharedMemory{nameArgb, c_width * c_height * 4}};
+
     //Address for lookup_cache
     uint16_t addBk [2048][512*2];
+
+    //Build Timing Variables
+    cluon::data::TimeStamp pT1, pT2;
 
     //Build pixelmap
 
@@ -112,11 +125,11 @@ int32_t main(int32_t argc, char **argv) {
     //Each value needs both an x and y, hence the *2. 
 
     for (int i = 0; i <= 4095; i++){
-      for (int j = 0; j<= 512; j++) {
-        int distance = j;
+      for (int j = 0; j<= 511; j++) {
+        uint16_t distance = j;
         float angle = (float(i)/4096*360);
         float angle_rad;
-        int x, y;
+        uint16_t x, y;
 
         if (angle < 90) {
           angle_rad = radians(angle);
@@ -148,25 +161,33 @@ int32_t main(int32_t argc, char **argv) {
       }
     }
 
-    if (verbose) std::cout << "Address Book Init with size: " << sizeof(addBk) << std::endl; //This could be a test. 
-    if (verbose) std::cout << shmArgb->size() << std::endl; //Also this
-
+    if (verbose) std::cout << "Address Book Init with size: " << sizeof(addBk) << ". Should match size of alloc mem: " << shmArgb->size() << std::endl; //This could be a test. 
     //Set X11 Paramaters
     Display* display{nullptr};
     Visual* visual{nullptr};
     Window window{0};
     XImage* ximage{nullptr};
+    if (verbose) std::cout << "X11 Params set" << std::endl;
 
     //If the shared memory is valid, build the image out of the shared memory values
     if (shmArgb->valid()) {
       display = XOpenDisplay(NULL);
+
+
       visual = DefaultVisual(display, 0);
+
       window = XCreateSimpleWindow(display, RootWindow(display, 0), 0, 0, c_width, c_height, 1, 0, 0);
+    
       shmArgb->lock();
       {
+        
         ximage = XCreateImage(display, visual, 24, ZPixmap, 0, shmArgb->data(), c_width, c_height, 32, c_width*4);
+        
       }
       shmArgb->unlock();
+      if (verbose) {
+        std::cerr << "Memory Allocated and X11 Image Initialised" << std::endl;
+      }
 
     } else {
       if (verbose) {
@@ -180,76 +201,22 @@ int32_t main(int32_t argc, char **argv) {
 
     //Start Lambda function that fires on recieving a RadarDetectionReading envelope on the cluon id. 
     cluon::OD4Session od4{static_cast<uint16_t>(
-        std::stoi(commandlineArguments["cid"])), [&addBk, &shmArgb, c_width, c_height, &display, &visual, &window, &ximage, &current_angle, origin, &model_update, &initial, &frame_idx, verbose](cluon::data::Envelope &&env){
-            
+        std::stoi(commandlineArguments["cid"])), [&pT1, &pT2, timings, &addBk, &shmArgb, c_width, c_height, &display, &visual, &window, &ximage, &current_angle, origin, &model_update, &initial, &frame_idx, verbose](cluon::data::Envelope &&env){
+            cluon::data::TimeStamp cT_now = cluon::time::now();
+            uint16_t test_c = 0;
+
+
             //Now, we unpack the cluon::data::Envelope to get our message.
             opendlv::proxy::RadarDetectionReading msg = cluon::extractMessage<opendlv::proxy::RadarDetectionReading>(std::move(env));
+            uint16_t current_azimuth = decode(msg, shmArgb, addBk, verbose, origin, c_height, c_width);
             
-            //If invalid strength, ensure that a valid number is written to the memory.
-            int current_strength = 0;
 
-            //Retrieve current angle, and set empty values for pixels and radians. 
-            float angle = msg.azimuth()/4096*360;
-            float angle_rad;
-            int x, y;
-            
-            //Extract the packet
-            std::string packet = msg.data();
-            if (verbose) std::cout << "Packet: " << packet.size() << std::endl;
-           
-            //Process the packet. 
-            for (int i = 0; i < packet.size(); i = i+2) {
-              current_strength = std::stoi(std::to_string(packet[i]));
-              int distance = i;
-
-              //Retrieve x and y location values from the pixel map based on azimuth and distance.
-              x = std::stoi(std::to_string(addBk[int(msg.azimuth())/2][distance*2]));
-              y = std::stoi(std::to_string(addBk[int(msg.azimuth())/2][(distance*2)+1]));
-                
-              if (verbose) std::cout << "    Angle: " << msg.azimuth() << " " << angle << " ";
-              if (verbose) std::cout << "Points: " << x << " " << y << " ";
-              
-              //Ensure x and y are valid
-              if (0 > x || x > (origin*2)) {
-                return 0;
-              }
-              if (0 > y || y > (origin*2)) {
-                return 0;
-              }
-
-
-              if (verbose) std::cout << "Strength: " << current_strength << " " << "Distance: " << distance << std::endl;
-              //Current strength is writing from -128 to 127. Add 128 to get correct 255 RGB Value. 
-              
-
-              //Use values from pixel map to get the image memory address for that pixel. 4 Bytes per pixel. X is *4, Y is *1024 (For the row) 
-              int index = ((4*x)+(1024*y)*4);
-              shmArgb->lock();
-
-              //Write the new values. White strength pixel, so all strengths are the same value. Set R, G or B to 255 for PPI color. 
-              //4th value is Alpha. Set as 0 for no transparency. 
-              shmArgb->data()[index] = (current_strength);
-              shmArgb->data()[index+1] = (current_strength);
-              shmArgb->data()[index+2] = (current_strength);
-              shmArgb->data()[index+3] = char(0);
-              
-              if (verbose) std::cout << "Index: " << index << ". Value " << std::to_string(shmArgb->data()[index]) << std::endl;
-
-              //Revalidate shared memory. 
-              shmArgb->unlock();
-              if (verbose) std::cout << shmArgb->valid() << std::endl;
-              shmArgb->notifyAll();
-
-            }
-
-            //Spoke unpacked. Final validation
-            if (verbose) std::cout << shmArgb->valid() << std::endl;
-            
             //If the azimuth has completed a circle
-            if (msg.azimuth() == 2 ) {
+            //Use 2 instead of 0 as dropped packets hold a 0 val for azimuth and will trigger this. 
+            if (remainder(current_azimuth, 170) == float(0)) {
               
               //Build PPI
-              if (verbose) std::cout << "Updating window" << std::endl;
+              if (verbose) std::cout << "Updating window: " << msg.azimuth() << std::endl;
               
               XMapWindow(display, window);
 
@@ -260,28 +227,193 @@ int32_t main(int32_t argc, char **argv) {
       
               shmArgb->unlock();
               shmArgb->notifyAll();
-              
-              model_update = false;
-              return(0);
+
             }
 
-            //Redundant
-            if (remainder(msg.azimuth()-1, 512) == 0 && model_update == false) {
-              //Reset
-              model_update = true;
-            }
+
+            /*
+            //For optic flow
+            //Check initial rotation is complete
+            if (msg.azimuth() == 2 && init) {
+              std::vector<uint16_t[4]> pixel_list;
+              //Retrieve current index list. 
+
+              //Define pixel block. 
+                //Xi neighbour Xii is +-4
+                //Yi neighbour Yii is +-(512*4)
+                //Pixel 0 is 0,0 [0:3], index 0. Pixel 1 is 1,0 is [4:7], index 4. 
+                //Pixel 512 is 1,0 [2048:2051], index 2048. Pixel 513 is 1,1 [2052:2055], index 2052.
+                //Resolve for y first. Add x. 
+
+                //To compare 1,1 to surroundings.
+
+              //for  
+              //for for
+              uint32_t current_index = ((4*current_x)+(1024*current_y)*4);
+              uint16_t closest_array[4];
+              uint16_t low_val = shmArgb->data()[current_index]-priorArgb->data()[current_index];
+
+
+              for (uint8_t y_r = comp_low; y_r <= comp_high; x++) {
+                uint16_t y_index = current_y + y_r; 
+                if (y_index > 1024 || y_index < 0){
+                  continue;
+                }
+
+                for (uint8_t x_r = comp_low; x_r <= comp_high; y++){
+                  if (y_index > 1024 || y_index < 0){
+                    continue;
+                  }
+                  uint16_t x_index = current_x + x_r;
+                  uint32_t lookup_index = ((4*x_index)+(1024*y_index)*4);
+                  uint16_t pixel_dif = shmArgb->data()[current_index]-priorArgb->data()[lookup_index];
+                  if (pixel_dif < low_val) {
+
+                    low_val = pixel_dif;
+                    closest_array[0] = current_x;
+                    closest_array[1] = current_y;
+                    closest_array[2] = x_r;
+                    closest_array[3] = y_r;
+                  }
+                }
+              }
+
+              pixel_list.push_back(closest_array);
+
+
+
+              //close close
+              //
+              
+              
             
+              
+              
+
+              shmArgb->lock();
+              priorArgb->lock();
+                
+              //Copy contents of current image to old image. 
+              memcpy(&priorArgb, &shmArgb, sizeof(priorArgb));
+                
+                
+              shmArgb->unlock();
+              priorArgb->unlock();
+
+              
+              
+            } else {
+              //Ensure that an entire circle is complete. 
+              
+                shmArgb->lock();
+                priorArgb->lock();
+                
+                //Copy contents of current image to old image. 
+                memcpy(&priorArgb, &shmArgb, sizeof(priorArgb));
+                
+                
+                shmArgb->unlock();
+                priorArgb->unlock();
+                init = true;
+
+            }
+
+            */
+            //For Timing Diagnostics
+            if (msg.azimuth() == 2 && timings) {
+              //std::cout << "Timings" << std::endl;
+              cluon::data::TimeStamp cT1, cT2;
+              
+
+              cT1 = cT_now;//current message time msg.
+              cT2 = cluon::time::now();//current Systime
+
+              float T1 = cluon::time::deltaInMicroseconds(cT1, pT1);
+              float T2 = cluon::time::deltaInMicroseconds(cT2, pT2);
+              std::cout << float((T2-T1)/1000) << std::endl;
+
+              pT1 = cT1;
+              pT2 = cT2;
+
+            }
+          //subfuntion draw
+          //subfunction optic
+          //subfunction timings
+
+
         }
     
     };
 
     //Set listening to true and open thread to wait for incoming messages. 
-
-    bool listening = true;
+   // od4.dataTrigger(opendlv::proxy::RadarDetectionReading::ID(), onMyMessage1); //This is in the tutorial. Seems to work without it?
     
-    using namespace std::chrono_literals;
+    bool listening = true;
+    int dummy_azimuth = 0;
+
+    while(demo) {
+      
+        if (verbose) std::cout << "...DEMO..." << std::endl;
+        dummy_azimuth++;
+        if (dummy_azimuth >= 4096) dummy_azimuth = 0;
+        
+        opendlv::proxy::RadarDetectionReading dummy_msg;
+    
+    //Payload
+        dummy_msg.azimuth(dummy_azimuth);
+    
+        std::vector<uint8_t> sample{
+
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92,
+            0xe7, 0x9c, 0x95, 0x95, 0x08, 0x00, 0x7c, 0x0e,
+            0x00, 0x06, 0x81, 0xfe, 0x45, 0x00, 0x00, 0xf4,
+            0x00, 0x00, 0xaa, 0xff, 0xff, 0x04, 0xc2, 0x92
+
+          };
+
+
+          const std::string payload(reinterpret_cast<char*>(sample.data()), sample.size());
+          dummy_msg.data(payload);
+          dummy_msg.range(1500);
+          od4.send(dummy_msg);
+
+    }
+
     while (listening) {
-      std::this_thread::sleep_for(1s);
+      
+      if (!demo) std::this_thread::sleep_for(1s);
     }
     return retCode;
   }
