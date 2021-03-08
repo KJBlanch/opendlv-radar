@@ -63,7 +63,7 @@ Instance 2.
 ./opendlv-device-radar-navigation --cid=111 --id=16 --demo
 ```
 
-## Commit Convetion
+## Commit Convention
 
 Commit Number. Author
 
@@ -75,9 +75,11 @@ New/Ongoing Bugs
 
 Compilability/Status
 
-## Branch Convetion
+## Branch Convention
 
-Main - For release (Build & testing handled by GitLab Actions) WIP - For versioning, and bughandling before release.
+Main - For release (Build & testing handled by GitLab Actions) 
+
+WIP - For versioning, and bughandling before release.
 
 Other subranches are feature related. Optic = OpticFlow implementation
 
