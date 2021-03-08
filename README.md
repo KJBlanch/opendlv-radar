@@ -49,6 +49,11 @@ mkdir build && cd build
 cmake -D CMAKE_BUILD_TYPE=Release ..
 make && make test && make install
 ```
+For an expanded look at the unit-tests, run the following
+
+```
+ctest --verbose
+```
 
 ## Run X11 Demo on example Ubuntu 18.04 LTS. 
 
