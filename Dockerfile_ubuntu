@@ -14,12 +14,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # Builder
-FROM alpine as builder
-RUN apk update && \
-    apk --no-cache add \
-        linux-headers \
+FROM ubuntu as builder
+RUN apt-get update && \
+    apt-get install -y \
         cmake \
         g++ \
+        x11-apps \
+        libx11-6 \
         libx11-dev \
         make
 
@@ -34,10 +35,8 @@ RUN mkdir docker_build && \
 
 
 # Runtime
-FROM alpine
-RUN apk update && \
-    apk --no-cache add \
-        libx11
+FROM ubuntu
+
 
 WORKDIR /usr/bin
 COPY --from=builder /tmp/opendlv-device-radar-navigation-dest/bin/opendlv-device-radar-navigation .

@@ -31,7 +31,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
-    -lX11 \
     -D_XOPEN_SOURCE=700 \
     -D_FORTIFY_SOURCE=2 \
     -DHAVE_JPEG \
@@ -78,14 +77,13 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.hpp
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/${OPENDLV_STANDARD_MESSAGE_SET}
     ${CMAKE_BINARY_DIR}/cluon-msc)
 
-find_package(X11 REQUIRED)
-include_directories(SYSTEM ${X11_INCLUDE_DIRS})
-set(LIBRARIES ${LIBRARIES} ${X11_X11_LIB})
-
 
 include_directories(SYSTEM ${CMAKE_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/test)
+
+
+set(LIBRARIES ${LIBRARIES} Threads::Threads)
 
 if(UNIX)
     if(NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "Darwin")
@@ -95,12 +93,17 @@ if(UNIX)
     endif()
 endif()
 
+find_package(X11 REQUIRED)
+include_directories(SYSTEM ${X11_INCLUDE_DIR})
+
+
+set(LIBRARIES ${LIBRARIES} ${X11_X11_LIB})
 
 
 ################################################################################
 # Gather all object code first to avoid double compilation.
 add_library(${PROJECT_NAME}-core OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/src/radar-decoder.cpp)
-set(LIBRARIES ${LIBRARIES} Threads::Threads)
+
 
 # Add dependency to generate .hpp file.
 add_custom_target(generate_opendlv_standard_message_set_hpp DEPENDS ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.hpp)
@@ -112,12 +115,6 @@ add_dependencies(${PROJECT_NAME}-core generate_opendlv_standard_message_set_hpp)
 add_executable(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}.cpp $<TARGET_OBJECTS:${PROJECT_NAME}-core>)
 target_link_libraries(${PROJECT_NAME} ${LIBRARIES})
 
-#add_executable(${PROJECT_NAME}-core
-  #${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}.cpp
-  #${CMAKE_BINARY_DIR}/cluon-complete.hpp
-  #${CMAKE_BINARY_DIR}/opendlv-standard-message-set.hpp)
-
-#target_link_libraries( ${PROJECT_NAME}-core ${LIBRARIES})
 
 ################################################################################
 # Enable unit testing.
@@ -128,4 +125,4 @@ add_test(NAME ${PROJECT_NAME}-runner COMMAND ${PROJECT_NAME}-runner)
 
 ################################################################################
 # Install executable.
-install(TARGETS ${PROJECT_NAME}-core DESTINATION bin COMPONENT ${PROJECT_NAME})
+install(TARGETS ${PROJECT_NAME} DESTINATION bin COMPONENT ${PROJECT_NAME})
