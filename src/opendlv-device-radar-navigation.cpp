@@ -1,4 +1,4 @@
-/*
+ /*
  * Copyright (C) 2021 Krister Blanch
  *
  * This program is free software: you can redistribute it and/or modify
@@ -352,7 +352,7 @@ int32_t main(int32_t argc, char **argv) {
     int dummy_azimuth = 0;
 
     while(demo) {
-      
+
         if (verbose) std::cout << "...DEMO..." << std::endl;
         dummy_azimuth++;
         if (dummy_azimuth >= 4096) dummy_azimuth = 0;

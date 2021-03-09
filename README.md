@@ -20,7 +20,7 @@ The following dependecies are included and will compile with the software.
 
 The following dependecies are NOT included and require installation to build from source. This is only required if NOT using the docker-compose file. 
 
-* [X11] (https://www.x.org/wiki/) - [![License: MIT]](https://opensource.org/licenses/mit-license.php)]
+* [X11](https://www.x.org/wiki/) - [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Usage
 
@@ -91,4 +91,3 @@ Other subranches are feature related. Optic = OpticFlow implementation
 ## License
 
 * This project is released under the terms of the GNU GPLv3 License
-

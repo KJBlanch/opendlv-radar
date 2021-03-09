@@ -42,6 +42,7 @@ int decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon::Sh
   //msg
   if (msg.data().size() == 0) {
       //empty packet
+      if (verbose) std::cout << "Error: Empty Packet" << std::endl; 
       return(-1);
   }
 
@@ -49,38 +50,47 @@ int decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon::Sh
   //shmArgb
   if (!shmArgb->valid() ) {
       //invalid memory
+      if (verbose) std::cout << "Error: Invalid Memory" << std::endl; 
       return(-2);
   }
   
-  
-  //addBk
-
-  //verbose - Uhhh, it's a bool. Probably should look at how to check for errors with this one. Maybe null/void?
-
   //c_height
-  if (c_height <= 0) {
+  if (c_height == NULL) {
+    if (verbose) std::cout << "Error: Canvas height is empty" << std::endl; 
     return (-3);
   }
 
   //c_width
-  if (c_width <= 0) {
+  if (c_width == NULL) {
+    if (verbose) std::cout << "Error: Canvas width is empty" << std::endl;
     return (-4);
   }
 
   //origin
-  if (origin <= 0) {
+  if (origin == NULL) {
+    if (verbose) std::cout << "Error: Canvas origin point is empty" << std::endl;
     return (-5);
   } else if (origin > c_width) {
+    if (verbose) std::cout << "Error: Canvas origin exceeds width" << std::endl;
     return (-6);
   } else if (origin > c_height) {
+    if (verbose) std::cout << "Error: Canvas origin exceeds height" << std::endl;
     return (-7);
   }
 
-
+  if (msg.azimuth() == NULL) {
+    if (verbose) std::cout << "Error: Azimuth point is empty" << std::endl;
+    return (-12);
+  } else if (msg.azimuth() > 4096) {
+    if (verbose) std::cout << "Error: Azimuth point is corrupted" << std::endl;
+    return (-13); 
+  }
   
   uint8_t current_strength = 0;
 
   //Retrieve current angle, and set empty values for pixels and radians. 
+
+
   double angle = msg.azimuth()/4096*360;
   double angle_rad;
   uint16_t x, y;
@@ -93,7 +103,7 @@ int decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon::Sh
     return (-8);
   } 
 
-  if (verbose) std::cout << "Packet: " << packet.size() << std::endl;
+  if (verbose) std::cout << "Packet size: " << packet.size() << std::endl;
   int k = 1;
   //Process the packet. 
   for (int i = 0; i < packet.size(); i = i+k) {
@@ -106,14 +116,16 @@ int decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon::Sh
     x = addBk[int(msg.azimuth())/2][distance*2];
     y = addBk[int(msg.azimuth())/2][(distance*2)+1];
       
-    if (verbose) std::cout << "    Angle: " << msg.azimuth() << " " << angle << " ";
+    if (verbose) std::cout << "Angle: " << msg.azimuth() << " " << angle << " ";
     if (verbose) std::cout << "Points: " << x << " " << y << " ";
     
     //Ensure x and y are valid
-    if (x > (origin*2)) {
+    if (x > (c_width)) {
+      if (verbose) std::cout << "Error: X value exceeds canvas width" << std::endl;
       return (-9);
     }
-    if (y > (origin*2)) {
+    if (y > (c_height)) {
+      if (verbose) std::cout << "Error: Y value exceeds canvas height" << std::endl;
       return (-10);
     }
 
@@ -128,6 +140,7 @@ int decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon::Sh
     //4th value is Alpha. Set as 0 for no transparency. 
 
     if (index > shmArgb->size()) {
+        if (verbose) std::cout << "Critical Error: Lookup index exceeds memory bounds. This will lead to a SEGFAULT" << std::endl;
         return(-11);
     }
 
@@ -152,6 +165,6 @@ int decode (opendlv::proxy::RadarDetectionReading msg, std::unique_ptr<cluon::Sh
 
   }
   //Spoke unpacked. Final validation
-  if (verbose) std::cout << shmArgb->valid() << std::endl;
+  if (verbose) std::cout << "Packet Validated: " << shmArgb->valid() << std::endl;
   return (msg.azimuth());
 }
