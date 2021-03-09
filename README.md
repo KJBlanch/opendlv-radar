@@ -20,13 +20,13 @@ The following dependecies are included and will compile with the software.
 
 The following dependecies are NOT included and require installation to build from source. This is only required if NOT using the docker-compose file. 
 
-* [X11] (https://www.x.org/wiki/) - [![License: MIT]](https://opensource.org/licenses/mit-license.php)]
+* [X11](https://www.x.org/wiki/) - [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Usage
 
 It is recommended to use the self-contained docker file to build, test and run. However, demonstration of the current system requires the software built from source. This has been tested on Ubuntu 18.04 LTS. 
 
-# Docker
+### Docker
 
 Requires docker and docker compose. 
 
@@ -40,7 +40,7 @@ Compiling with docker will handle all dependencies as well as run the test-radar
 
 *NOTE* Whilst the software is currently compilable with docker, there are communication bugs between docker containers, resulting in a non-functional system, aside from initialising. Therefore, for current build demonstration, it will have to be built from source and deployed locally. All testing can be done either via docker-compose or the local build. 
 
-# Build from sources on example Ubuntu 18.04 LTS
+### Build from sources on example Ubuntu 18.04 LTS
 
 To build this software, you need cmake, C++14 or newer, make, and X11/X11-dev. Having these preconditions, just run cmake and make as follows:
 
@@ -49,8 +49,13 @@ mkdir build && cd build
 cmake -D CMAKE_BUILD_TYPE=Release ..
 make && make test && make install
 ```
+For an expanded look at the unit-tests, run the following
 
-# Run X11 Demo on example Ubuntu 18.04 LTS. 
+```
+ctest --verbose
+```
+
+## Run X11 Demo on example Ubuntu 18.04 LTS. 
 
 Whilst the program itself relies upon recieving Cluon Envelopes (From OpenDLV Navico software or OpenDLV .rec file playback), it has a demonstrator mode which is self contained. By attaching the --demo flag, a second instance of the program will be able to send a dummy envelope to the first. 
 
@@ -63,7 +68,7 @@ Instance 2.
 ./opendlv-device-radar-navigation --cid=111 --id=16 --demo
 ```
 
-## Commit Convetion
+## Commit Convention
 
 Commit Number. Author
 
@@ -75,13 +80,14 @@ New/Ongoing Bugs
 
 Compilability/Status
 
-## Branch Convetion
+## Branch Convention
 
-Main - For release (Build & testing handled by GitLab Actions) WIP - For versioning, and bughandling before release.
+Main - For release (Build & testing handled by GitLab Actions) 
+
+WIP - For versioning, and bughandling before release.
 
 Other subranches are feature related. Optic = OpticFlow implementation
 
 ## License
 
 * This project is released under the terms of the GNU GPLv3 License
-
