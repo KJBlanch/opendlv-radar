@@ -433,7 +433,7 @@ TEST_CASE("Test 8 - decoder with correct variables") {
   msg.range(1500);
 
   uint16_t addBk[2048][512*2]; 
-  bool verbose = true;
+  bool verbose = false;
 
   uint16_t origin = 512; 
   uint16_t c_height = 1024;
