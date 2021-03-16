@@ -93,9 +93,14 @@ if(UNIX)
     endif()
 endif()
 
+find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+
+set(LIBRARIES ${LIBRARIES} ${OpenCV_LIBS} 
+
+
 find_package(X11 REQUIRED)
 include_directories(SYSTEM ${X11_INCLUDE_DIR})
-
 
 set(LIBRARIES ${LIBRARIES} ${X11_X11_LIB})
 
